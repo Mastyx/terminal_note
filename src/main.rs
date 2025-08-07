@@ -341,7 +341,7 @@ fn ui_list(f: &mut Frame, table_state: &mut TableState, notes: &[Note]) {
             Cell::from(item.title.clone()),
             Cell::from(modified_date.to_string()),
         ];
-        Row::new(cells).height(1).bottom_margin(1)
+        Row::new(cells).height(1)
     });
     let t = Table::new(rows, &[Constraint::Percentage(50), Constraint::Percentage(50)])
         .header(header)
