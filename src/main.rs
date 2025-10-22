@@ -371,7 +371,12 @@ fn ui_list(f: &mut Frame, table_state: &mut TableState, notes: &[Note]) {
         &[Constraint::Percentage(50), Constraint::Percentage(50)],
     )
     .header(header)
-    .block(Block::default().borders(Borders::ALL).title("Notes"))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Notes")
+            .border_type(BorderType::Rounded),
+    )
     .highlight_style(selected_style)
     .highlight_symbol(">> ");
     f.render_stateful_widget(t, top_chunks[0], table_state);
@@ -384,7 +389,12 @@ fn ui_list(f: &mut Frame, table_state: &mut TableState, notes: &[Note]) {
 
     let content_p = Paragraph::new(selected_note_content)
         .wrap(Wrap { trim: true })
-        .block(Block::default().borders(Borders::ALL).title("Preview"));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Preview")
+                .border_type(BorderType::Rounded),
+        );
     f.render_widget(content_p, top_chunks[1]);
 
     let footer = Paragraph::new("Ctrl-Q: Quit | Enter: Edit | Ctrl-N: New | ↑/↓: Navigate")
