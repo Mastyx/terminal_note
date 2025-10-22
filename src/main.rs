@@ -11,13 +11,16 @@ use std::io;
 use std::path::PathBuf;
 use std::process::Command;
 
+// struct principale per la configurazione della CLI
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
+    /// sottocomando opzionale da eseguire
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
+/// enum che definisce i sottocomandi disponibili
 #[derive(Subcommand)]
 enum Commands {
     /// Create a new note
@@ -44,6 +47,10 @@ enum Commands {
     },
 }
 
+// Stuttura dati per le note
+
+/// struct che rappresenta la singola nota
+/// derivata per la serializzazione
 #[derive(Serialize, Deserialize, Debug)]
 struct Note {
     title: String,
@@ -75,54 +82,59 @@ fn ensure_data_dir_exists() -> io::Result<()> {
 
 fn find_preferred_editor() -> String {
     // Prima controlla se vi è disponibile
-    if Command::new("which").arg("nvim").output().map_or(false, |output| output.status.success()) {
+    if Command::new("which")
+        .arg("nvim")
+        .output()
+        .map_or(false, |output| output.status.success())
+    {
         return "nvim".to_string();
     }
-    
+
     // Se vi non è disponibile, controlla altre opzioni comuni
     let editors = vec!["vi", "nano", "vim", "gedit"];
-    
+
     for editor in editors {
-        if Command::new("which").arg(editor).output().map_or(false, |output| output.status.success()) {
+        if Command::new("which")
+            .arg(editor)
+            .output()
+            .map_or(false, |output| output.status.success())
+        {
             return editor.to_string();
         }
     }
-    
+
     // Fallback a nano come default
     "nano".to_string()
 }
 
 fn open_editor_with_content(content: &str) -> io::Result<String> {
-    
     // Crea un file temporaneo
     let temp_dir = std::env::temp_dir();
     let temp_file = temp_dir.join(format!("note_edit_{}.txt", std::process::id()));
-    
+
     // Scrivi il contenuto iniziale nel file temporaneo
     fs::write(&temp_file, content)?;
-    
+
     // Trova l'editor preferito
     let editor = find_preferred_editor();
-    
+
     // Apri l'editor
-    let status = Command::new(&editor)
-        .arg(&temp_file)
-        .status()?;
-    
+    let status = Command::new(&editor).arg(&temp_file).status()?;
+
     if !status.success() {
         fs::remove_file(&temp_file).ok(); // Ignora errori nella rimozione
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            format!("Editor {} exited with non-zero status", editor)
+            format!("Editor {} exited with non-zero status", editor),
         ));
     }
-    
+
     // Leggi il contenuto modificato
     let edited_content = fs::read_to_string(&temp_file)?;
-    
+
     // Pulisci il file temporaneo
     fs::remove_file(&temp_file).ok(); // Ignora errori nella rimozione
-    
+
     Ok(edited_content)
 }
 
@@ -169,6 +181,8 @@ fn handle_list() -> io::Result<()> {
             serde_json::from_str(&file_content).unwrap()
         })
         .collect();
+    // Ordina le note per data di modifica (dalla più recente alla meno recente)
+    entries.sort_by(|a, b| b.modification_date.cmp(&a.modification_date));
 
     loop {
         // setup terminal
@@ -196,19 +210,22 @@ fn handle_list() -> io::Result<()> {
             } else {
                 handle_external_edit(&title)?;
             }
-            // Re-read the notes to reflect the changes
-            entries = fs::read_dir(get_data_dir())?
-                .filter_map(Result::ok)
-                .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("json"))
-                .map(|entry| {
-                    let path = entry.path();
-                    let file_content = fs::read_to_string(&path).unwrap_or_default();
-                    serde_json::from_str(&file_content).unwrap()
-                })
-                .collect();
         } else {
             break;
         }
+
+        // Re-read the notes to reflect the changes
+        entries = fs::read_dir(get_data_dir())?
+            .filter_map(Result::ok)
+            .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("json"))
+            .map(|entry| {
+                let path = entry.path();
+                let file_content = fs::read_to_string(&path).unwrap_or_default();
+                serde_json::from_str(&file_content).unwrap()
+            })
+            .collect();
+        // Riordina dopo le modifiche
+        entries.sort_by(|a, b| b.modification_date.cmp(&a.modification_date));
     }
 
     Ok(())
@@ -336,18 +353,27 @@ fn ui_list(f: &mut Frame, table_state: &mut TableState, notes: &[Note]) {
         .height(1)
         .bottom_margin(1);
     let rows = notes.iter().map(|item| {
-        let modified_date = item.modification_date.replace("T", " ").split(".").next().unwrap_or("").to_string();
+        let modified_date = item
+            .modification_date
+            .replace("T", " ")
+            .split(".")
+            .next()
+            .unwrap_or("")
+            .to_string();
         let cells = vec![
             Cell::from(item.title.clone()),
             Cell::from(modified_date.to_string()),
         ];
         Row::new(cells).height(1)
     });
-    let t = Table::new(rows, &[Constraint::Percentage(50), Constraint::Percentage(50)])
-        .header(header)
-        .block(Block::default().borders(Borders::ALL).title("Notes"))
-        .highlight_style(selected_style)
-        .highlight_symbol(">> ");
+    let t = Table::new(
+        rows,
+        &[Constraint::Percentage(50), Constraint::Percentage(50)],
+    )
+    .header(header)
+    .block(Block::default().borders(Borders::ALL).title("Notes"))
+    .highlight_style(selected_style)
+    .highlight_symbol(">> ");
     f.render_stateful_widget(t, top_chunks[0], table_state);
 
     let selected_note_content = if let Some(selected) = table_state.selected() {
@@ -366,9 +392,6 @@ fn ui_list(f: &mut Frame, table_state: &mut TableState, notes: &[Note]) {
         .alignment(Alignment::Center);
     f.render_widget(footer, main_chunks[1]);
 }
-
-
-
 
 fn handle_show(title: &str) -> io::Result<()> {
     let path = get_note_path(title);
@@ -433,7 +456,10 @@ fn ui_show(f: &mut Frame, note: &Note) {
         )
         .split(size);
 
-    let block = Block::default().borders(Borders::ALL).title(" Note ").border_type(BorderType::Rounded);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Note ")
+        .border_type(BorderType::Rounded);
     f.render_widget(block, size);
 
     let title = Paragraph::new(note.title.as_str())
@@ -496,7 +522,6 @@ fn handle_edit(title: &str) -> io::Result<()> {
 
     Ok(())
 }
-
 
 fn main() {
     let cli = Cli::parse();
